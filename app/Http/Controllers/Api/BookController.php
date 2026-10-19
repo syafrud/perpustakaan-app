@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Book;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -13,9 +14,36 @@ class BookController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Book::with('author', 'categories')->get());
+        $books = Book::with('author', 'categories')
+            ->when($request->query('search'), function (Builder $query, string $search): void {
+                $query->where(function (Builder $query) use ($search): void {
+                    $query->where('title', 'like', '%'.$search.'%')
+                        ->orWhereHas('author', function (Builder $query) use ($search): void {
+                            $query->where('name', 'like', '%'.$search.'%');
+                        });
+                });
+            })
+            ->when($request->query('category_id'), function (Builder $query, string $categoryId): void {
+                $query->whereHas('categories', function (Builder $query) use ($categoryId): void {
+                    $query->where('categories.id', $categoryId);
+                });
+            })
+            ->when($request->boolean('in_stock'), function (Builder $query): void {
+                $query->where('stock', '>', 0);
+            })
+            ->get();
+
+        return response()->json($books);
+    }
+
+    /**
+     * Display a listing of books whose stock is running out (< 5).
+     */
+    public function lowStock(): JsonResponse
+    {
+        return response()->json(Book::with('author', 'categories')->where('stock', '<', 5)->get());
     }
 
     /**
