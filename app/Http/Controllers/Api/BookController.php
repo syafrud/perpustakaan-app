@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 
 class BookController extends Controller
 {
@@ -29,11 +30,14 @@ class BookController extends Controller
             'price' => 'required|numeric|min:0',
             'stock' => 'required|integer|min:0',
             'author_id' => 'required|exists:authors,id',
+            'category_ids' => 'required|array|min:1',
+            'category_ids.*' => 'integer|exists:categories,id',
         ]);
 
-        $book = Book::create($validated);
+        $book = Book::create(Arr::except($validated, 'category_ids'));
+        $book->categories()->attach($validated['category_ids']);
 
-        return response()->json($book, 201);
+        return response()->json($book->load('author', 'categories'), 201);
     }
 
     /**
